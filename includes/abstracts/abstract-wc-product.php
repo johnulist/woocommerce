@@ -66,6 +66,11 @@ class WC_Product extends WC_Abstract_Legacy_Product {
 		'downloadable'       => false, // @todo
 		'category_ids'       => array(),
 		'tag_ids'            => array(),
+		'thumbnail_id'           => '',
+		'gallery_attachment_ids' => array(),
+		'download_limit'         => -1,
+		'download_expiry'        => -1,
+		'download_type'          => 'standard',
 	);
 
 	/**
@@ -513,6 +518,55 @@ class WC_Product extends WC_Abstract_Legacy_Product {
 		return $this->data['tag_ids'];
 	}
 
+	/**
+	 * Returns the gallery attachment ids.
+	 *
+	 * @return array
+	 */
+	public function get_gallery_attachment_ids() {
+		return apply_filters( 'woocommerce_product_gallery_attachment_ids', array_filter( array_filter( $this->data['gallery_attachment_ids'] ), 'wp_attachment_is_image' ), $this );
+	}
+
+	/**
+	 * Get download limit.
+	 *
+	 * @since 2.7.0
+	 * @return int
+	 */
+	public function get_download_limit() {
+		return $this->data['download_limit'];
+	}
+
+	/**
+	 * Get download expiry.
+	 *
+	 * @since 2.7.0
+	 * @return int
+	 */
+	public function get_download_expiry() {
+		return $this->data['download_expiry'];
+	}
+
+	/**
+	 * Get download type.
+	 *
+	 * @since 2.7.0
+	 * @return string
+	 */
+	public function get_download_type() {
+		return $this->data['download_type'];
+	}
+
+	/**
+	 * Get thumbnail ID.
+	 *
+	 * @since 2.7.0
+	 * @return string
+	 */
+	public function get_thumbnail_id() {
+		return $this->data['thumbnail_id'];
+	}
+
 	/*
 	|--------------------------------------------------------------------------
 	| Setters
@@ -929,6 +983,56 @@ class WC_Product extends WC_Abstract_Legacy_Product {
 		$this->data['tag_ids'] = $this->sanitize_term_ids( $term_ids, 'product_tag' );
 	}
 
+	/**
+	 * Set gallery attachment ids.
+	 *
+	 * @since 2.7.0
+	 * @param array $gallery_ids
+	 */
+	public function set_gallery_attachment_ids( $gallery_ids ) {
+		$this->data['gallery_attachment_ids'] = $gallery_ids;
+	}
+
+	/**
+	 * Set download limit.
+	 *
+	 * @since 2.7.0
+	 * @param int $download_limit
+	 */
+	public function set_download_limit( $download_limit ) {
+		$this->data['download_limit'] = -1 === (int) $download_limit || '' === $download_limit ? -1 : absint( $download_limit );
+	}
+
+	/**
+	 * Set download expiry.
+	 *
+	 * @since 2.7.0
+	 * @param int $download_expiry
+	 */
+	public function set_download_expiry( $download_expiry ) {
+		$this->data['download_expiry'] = -1 === (int) $download_expiry || '' === $download_expiry ? -1 : absint( $download_expiry );
+	}
+
+	/**
+	 * Set download type.
+	 *
+	 * @since 2.7.0
+	 * @param string $download_type
+	 */
+	public function set_download_type( $download_type ) {
+		$this->data['download_type'] = $download_type;
+	}
+
+	/**
+	 * Set thumbnail ID.
+	 *
+	 * @since 2.7.0
+	 * @param int $thumbnail_id
+	 */
+	public function set_thumbnail_id( $thumbnail_id = '' ) {
+		$this->data['thumbnail_id'] = $thumbnail_id;
+	}
+
 	/*
 	|--------------------------------------------------------------------------
 	| CRUD methods
@@ -1029,6 +1133,11 @@ class WC_Product extends WC_Abstract_Legacy_Product {
 			'menu_order'         => $post_object->menu_order,
 			'category_ids'       => $this->get_term_ids( 'product_cat' ),
 			'tag_ids'            => $this->get_term_ids( 'product_tag' ),
+			'gallery_attachment_ids' => array_filter( explode( ',', get_post_meta( $id, '_product_image_gallery', true ) ) ),
+			'download_limit'         =>  get_post_meta( $id, '_download_limit', true ),
+			'download_expiry'        => get_post_meta( $id, '_download_expiry', true ),
+			'download_type'          => get_post_meta( $id, '_download_type', true ),
+			'thumbnail_id'           => get_post_thumbnail_id( $id ),
 		) );
 		if ( $this->is_on_sale() ) {
 			$this->set_price( $this->get_sale_price() );
@@ -1055,6 +1164,7 @@ class WC_Product extends WC_Abstract_Legacy_Product {
 			'post_excerpt'   => $this->get_short_description(),
 			'post_parent'    => $this->get_parent_id(),
 			'comment_status' => $this->get_reviews_allowed(),
+			'ping_status'    => 'closed',
 			'menu_order'     => $this->get_menu_order(),
 			'post_date'      => date( 'Y-m-d H:i:s', $this->get_date_created() ),
 			'post_date_gmt'  => get_gmt_from_date( date( 'Y-m-d H:i:s', $this->get_date_created() ) ),
@@ -1062,6 +1172,7 @@ class WC_Product extends WC_Abstract_Legacy_Product {
 
 		if ( $id && ! is_wp_error( $id ) ) {
 			$this->set_id( $id );
+			wp_set_object_terms( $id, $this->get_type(), 'product_type' );
 			$this->update_post_meta();
 			$this->update_terms();
 			$this->save_meta_data();
@@ -1147,6 +1258,16 @@ class WC_Product extends WC_Abstract_Legacy_Product {
 		update_post_meta( $id, '_purchase_note', $this->get_purchase_note() );
 		update_post_meta( $id, '_product_attributes', $this->get_attributes() );
 		update_post_meta( $id, '_default_attributes', $this->get_default_attributes() );
+		update_post_meta( $id, '_product_image_gallery', implode( ',', $this->get_gallery_attachment_ids() ) );
+		update_post_meta( $id, '_download_limit', $this->get_download_limit() );
+		update_post_meta( $id, '_download_expiry', $this->get_download_expiry() );
+		update_post_meta( $id, '_download_type', $this->get_download_type() );
+
+		if ( ! empty( $this->get_thumbnail_id() ) ) {
+			set_post_thumbnail( $id, $this->get_thumbnail_id() );
+		} else {
+			delete_post_meta( $id, '_thumbnail_id' );
+		}
 
 		if ( $this->is_on_sale() ) {
 			update_post_meta( $id, '_price', $this->get_sale_price() );
@@ -1493,21 +1614,6 @@ class WC_Product extends WC_Abstract_Legacy_Product {
 			$image = '';
 		}
 		return str_replace( array( 'https://', 'http://' ), '//', $image );
-	}
-
-	/*
-	|--------------------------------------------------------------------------
-	| @todo
-	|--------------------------------------------------------------------------
-	*/
-
-	/**
-	 * Returns the gallery attachment ids.
-	 *
-	 * @return array
-	 */
-	public function get_gallery_attachment_ids() {
-		return apply_filters( 'woocommerce_product_gallery_attachment_ids', array_filter( array_filter( (array) explode( ',', $this->product_image_gallery ) ), 'wp_attachment_is_image' ), $this );
 	}
 
 	/**
